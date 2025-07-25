@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sophie AI - Integrated Workspace</title>
+    <title>interactive portable desktop v1 - sophieAi</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -269,13 +269,17 @@
         .loader {
             width: 20px;
             height: 20px;
-            border: 3px solid #FFF;
+            border: 3px solid;
             border-bottom-color: transparent;
             border-radius: 50%;
             display: inline-block;
             box-sizing: border-box;
             animation: rotation 1s linear infinite;
         }
+        .btn .loader { border-color: #FFF; border-bottom-color: transparent; }
+        .day-mode .btn-primary .loader { border-color: #fff; border-bottom-color: transparent; }
+        .day-mode .btn-secondary .loader { border-color: #1f2937; border-bottom-color: transparent; }
+
 
         @keyframes rotation {
             0% { transform: rotate(0deg); }
@@ -306,8 +310,8 @@
 
     <main class="container mx-auto p-6 md:p-10">
         <div class="text-center mb-12 relative">
-            <h1 class="text-4xl md:text-5xl font-bold text-white" style="text-shadow: 0 0 15px var(--emerald-dusk), 0 0 25px var(--violet-glow);">AI-Powered Workspace</h1>
-            <p class="text-gray-400 mt-3 max-w-2xl mx-auto">Your intelligent dashboard for links, notes, and ideas.</p>
+            <h1 class="text-4xl md:text-5xl font-bold text-white" style="text-shadow: 0 0 15px var(--emerald-dusk), 0 0 25px var(--violet-glow);">interactive portable desktop v1 - sophieAi</h1>
+            <p class="text-gray-400 mt-3 max-w-2xl mx-auto">Capture your thoughts, track your mood, and find inspiration. Your personal space awaits.</p>
             
             <div class="mt-6 max-w-xl mx-auto">
                 <input id="global-search" type="text" placeholder="Search everything…" class="w-full !rounded-2xl !px-4 !py-3 bg-white/5 border border-white/10 focus:border-[var(--emerald-dusk)] focus:ring-0" />
@@ -333,10 +337,13 @@
                     <section id="editor-panel" class="panel" data-type="editor" style="grid-column: 1 / -1;">
                         <div class="panel-header">
                             <h2 class="panel-title">✍️ Editor</h2>
-                            <button id="ask-sophie-btn" class="btn btn-primary">
-                                <span id="btn-text">Ask Sophie</span>
-                                <span id="loader" class="hidden loader"></span>
-                            </button>
+                            <div class="flex gap-2">
+                                <button id="reflect-btn" class="btn btn-secondary">✨ Reflect</button>
+                                <button id="ask-sophie-btn" class="btn btn-primary">
+                                    <span id="btn-text">Ask Sophie</span>
+                                    <span id="loader" class="hidden loader"></span>
+                                </button>
+                            </div>
                         </div>
                         <div class="panel-body">
                             <textarea id="editor-input" placeholder="Start writing, or choose a prompt below to begin..." rows="10" class="!rounded-xl text-base"></textarea>
@@ -409,12 +416,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
     <script>
         // ===== Constants and State =====
-        const LS_KEY = 'sophieAiWorkspaceState_v5';
+        const LS_KEY = 'sophieAiWorkspaceState_v6';
         let state = {
             links: [],
             clipboard: [],
-            moods: [], // NEW: To store mood history
-            editorContent: ""
+            moods: [],
+            editorContent: "",
+            dailyData: {
+                date: null,
+                prompt: null,
+                whisper: null
+            }
         };
         
         const prompts = [
@@ -423,14 +435,14 @@
             { title: "To-Do List", desc: "Manual reminder for the day" },
         ];
 
-        const dailyPrompts = [
+        const staticDailyPrompts = [
             "If today had a color, what would it be?",
             "What are you grateful for today?",
             "What's one small thing that would make today great?",
             "Describe your current mood as a weather pattern."
         ];
 
-        const whispers = [
+        const staticWhispers = [
             "I remembered you smiled when it rained last week.",
             "You said you felt strong yesterday. Keep that energy going.",
             "Last Tuesday, you told me you missed the sun. I saved that memory for you.",
@@ -453,7 +465,7 @@
         let toastTimer;
         function showToast(msg) {
             const t = $('#toast-notification');
-            clearTimeout(toastimer);
+            clearTimeout(toastTimer);
             t.textContent = msg;
             t.classList.add('show');
             toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
@@ -472,7 +484,6 @@
         // ===== State Management =====
         function save() {
             state.editorContent = $('#editor-input').value;
-            // Removed sophieMemory, now saving moods
             localStorage.setItem(LS_KEY, JSON.stringify(state));
         }
 
@@ -481,6 +492,9 @@
             if (raw) {
                 const loadedState = JSON.parse(raw);
                 state = {...state, ...loadedState};
+                 if (!state.dailyData) {
+                    state.dailyData = { date: null, prompt: null, whisper: null };
+                }
             }
             $('#editor-input').value = state.editorContent || '';
             renderAll();
@@ -553,8 +567,8 @@
             const mirrorPanel = $('#sophie-mirror-panel');
             if (!mirrorPanel) return;
 
-            const randomWhisper = whispers[Math.floor(Math.random() * whispers.length)];
-            const randomPrompt = dailyPrompts[Math.floor(Math.random() * dailyPrompts.length)];
+            const todaysPrompt = state.dailyData.prompt || "What are you looking forward to today?";
+            const todaysWhisper = state.dailyData.whisper || "You've got this.";
             const today = new Date().toLocaleDateString();
             const todaysMood = state.moods.find(m => m.date === today)?.mood;
 
@@ -577,11 +591,11 @@
                     </div>
                     <div>
                         <p class="text-sm text-gray-300 mb-1">📝 Today’s Thought</p>
-                        <blockquote class="italic border-l-4 border-indigo-400 pl-4 text-gray-100">“${randomPrompt}”</blockquote>
+                        <blockquote class="italic border-l-4 border-indigo-400 pl-4 text-gray-100">“${todaysPrompt}”</blockquote>
                     </div>
                     <div>
                         <p class="text-sm text-gray-300 mb-1">💌 Sophie’s Whisper</p>
-                        <p class="text-pink-300 text-sm">“${randomWhisper}”</p>
+                        <p class="text-pink-300 text-sm">“${todaysWhisper}”</p>
                     </div>
                 </div>
             `;
@@ -596,24 +610,13 @@
         }
 
         // ===== Gemini API Integration =====
-        async function callSophieAPI() {
-            const askButton = $('#ask-sophie-btn');
-            const btnText = $('#btn-text');
-            const loader = $('#loader');
-            const apiKey = ""; 
-            
-            askButton.disabled = true;
-            btnText.classList.add('hidden');
-            loader.classList.remove('hidden');
+        async function callGemini(userPrompt, systemInstruction = "You are Sophie, a helpful AI assistant.") {
+            const apiKey = ""; // Injected by environment
 
-            const userPrompt = $('#editor-input').value;
-            // The "memory" is now the context of the entire app state, but for this call, we'll keep it simple.
-            // A more advanced implementation could stringify parts of the `state` object.
-            const systemInstruction = "You are Sophie, a helpful AI assistant integrated into a workspace. Be concise and friendly.";
             const combinedPrompt = `${systemInstruction}\n\n---\n\n${userPrompt}`;
-
-            let chatHistory = [{ role: "user", parts: [{ text: combinedPrompt }] }];
-            const payload = { contents: chatHistory };
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: combinedPrompt }] }]
+            };
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -623,30 +626,123 @@
                     body: JSON.stringify(payload)
                 });
 
+                const responseText = await response.text();
+
                 if (!response.ok) {
-                    const errorBody = await response.json();
-                    throw new Error(`API request failed: ${errorBody.error.message}`);
+                    let errorMessage = `API request failed with status ${response.status}`;
+                    try {
+                        const errorBody = JSON.parse(responseText);
+                        if (errorBody.error && errorBody.error.message) {
+                            errorMessage += `: ${errorBody.error.message}`;
+                        }
+                    } catch (e) {
+                        if (responseText) {
+                           errorMessage += `: ${responseText}`;
+                        }
+                    }
+                    throw new Error(errorMessage);
                 }
-
-                const result = await response.json();
                 
-                if (result.candidates?.[0]?.content?.parts?.[0]) {
-                    const sophieResponse = result.candidates[0].content.parts[0].text;
-                    const editor = $('#editor-input');
-                    editor.value += `\n\n---\n\n**Sophie's Response:**\n${sophieResponse}`;
-                    editor.scrollTop = editor.scrollHeight;
-                    save();
+                const result = JSON.parse(responseText);
+                if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    return result.candidates[0].content.parts[0].text;
                 } else {
-                    showToast("Sophie couldn't generate a response.");
+                    console.error("Unexpected API response structure:", result);
+                    return "Sophie couldn't generate a response.";
                 }
-
             } catch (error) {
-                console.error("Error calling Gemini API:", error);
+                console.error("Error calling or parsing Gemini API response:", error);
                 showToast(`Error: ${error.message}`);
+                throw error;
+            }
+        }
+
+        async function callSophieAPI() {
+            const askButton = $('#ask-sophie-btn');
+            const btnText = $('#btn-text');
+            const loader = $('#loader');
+            
+            askButton.disabled = true;
+            btnText.classList.add('hidden');
+            loader.classList.remove('hidden');
+
+            try {
+                const userPrompt = $('#editor-input').value;
+                const systemInstruction = "You are Sophie, a helpful AI assistant integrated into a workspace. Be concise and friendly.";
+                const sophieResponse = await callGemini(userPrompt, systemInstruction);
+                
+                const editor = $('#editor-input');
+                editor.value += `\n\n---\n\n**Sophie's Response:**\n${sophieResponse}`;
+                editor.scrollTop = editor.scrollHeight;
+                save();
+            } catch (error) {
+                // Error is already toasted in callGemini
             } finally {
                 askButton.disabled = false;
                 btnText.classList.remove('hidden');
                 loader.classList.add('hidden');
+            }
+        }
+
+        async function reflectWithSophie() {
+            const reflectButton = $('#reflect-btn');
+            reflectButton.disabled = true;
+            reflectButton.innerHTML = `<span class="loader"></span> Reflecting...`;
+
+            try {
+                const userPrompt = $('#editor-input').value;
+                if (userPrompt.trim().length < 20) {
+                    showToast("Please write a bit more for a meaningful reflection.");
+                    return;
+                }
+                const systemInstruction = "You are a thoughtful and empathetic journaling partner. Read the following journal entry and provide a short, insightful, and supportive reflection. Do not give advice unless asked. Focus on validating feelings and noticing patterns. Keep your reflection to 2-3 sentences.";
+                const reflection = await callGemini(userPrompt, systemInstruction);
+
+                const editor = $('#editor-input');
+                editor.value += `\n\n---\n\n**Sophie's Reflection ✨:**\n${reflection}`;
+                editor.scrollTop = editor.scrollHeight;
+                save();
+            } catch (error) {
+                // Error is already toasted
+            } finally {
+                reflectButton.disabled = false;
+                reflectButton.innerHTML = `✨ Reflect`;
+            }
+        }
+
+        async function generateDailyContent() {
+            const today = new Date().toLocaleDateString();
+            if (state.dailyData.date === today && state.dailyData.prompt && state.dailyData.whisper) {
+                return; // Already generated for today
+            }
+
+            showToast("Generating a fresh thought for you...");
+
+            try {
+                const promptInstruction = "Generate a single, creative, and introspective journal prompt. It should be short and open-ended, under 15 words.";
+                const dailyPromptPromise = callGemini("New prompt please", promptInstruction);
+
+                const recentMoods = state.moods.slice(-5).map(m => m.mood).join(', ');
+                const whisperInstruction = `Based on these recent moods (${recentMoods || 'none'}), write a short, kind, and personal 'whisper' of encouragement for the user. Keep it under 20 words.`;
+                const dailyWhisperPromise = callGemini("A whisper for me", whisperInstruction);
+                
+                const [dailyPrompt, dailyWhisper] = await Promise.all([dailyPromptPromise, dailyWhisperPromise]);
+                
+                state.dailyData = {
+                    date: today,
+                    prompt: dailyPrompt,
+                    whisper: dailyWhisper
+                };
+            } catch (error) {
+                console.error("Failed to generate daily content, using static fallbacks.", error);
+                state.dailyData = {
+                    date: today,
+                    prompt: staticDailyPrompts[Math.floor(Math.random() * staticDailyPrompts.length)],
+                    whisper: staticWhispers[Math.floor(Math.random() * staticWhispers.length)]
+                };
+            } finally {
+                save();
+                renderSophieMirror(); // Re-render with new data
             }
         }
 
@@ -731,6 +827,8 @@
             addHandler('#add-link-form', '#link-title-input', 'links');
             $('#editor-input')?.addEventListener('input', save);
             $('#ask-sophie-btn')?.addEventListener('click', callSophieAPI);
+            $('#reflect-btn')?.addEventListener('click', reflectWithSophie);
+            themeToggle.addEventListener('change', e => setTheme(e.target.checked));
         }
         
         // ===== Drag & Drop =====
@@ -826,6 +924,7 @@
             setTheme(localStorage.getItem('theme') === 'day');
             load();
             initialize();
+            generateDailyContent();
         });
     </script>
 </body>
