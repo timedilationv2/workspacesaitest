@@ -557,6 +557,8 @@
             const btnText = $('#btn-text');
             const loader = $('#loader');
 
+            const apiKey = ""; // This should be left empty, as it's handled by the execution environment.
+            
             askButton.disabled = true;
             btnText.classList.add('hidden');
             loader.classList.remove('hidden');
@@ -564,13 +566,13 @@
             const userPrompt = $('#editor-input').value;
             const memoryPrompt = $('#memory-input').value;
 
-            let chatHistory = [
-                { role: "system", parts: [{ text: memoryPrompt }] },
-                { role: "user", parts: [{ text: userPrompt }] }
-            ];
+            // **FIX:** Correctly structure the prompt for the API.
+            // The memory/system instruction is combined with the user's query into a single user message.
+            const combinedPrompt = `${memoryPrompt}\n\n---\n\n${userPrompt}`;
+
+            let chatHistory = [{ role: "user", parts: [{ text: combinedPrompt }] }];
 
             const payload = { contents: chatHistory };
-            const apiKey = ""; // Injected by environment
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
             try {
@@ -580,7 +582,11 @@
                     body: JSON.stringify(payload)
                 });
 
-                if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
+                if (!response.ok) {
+                    const errorBody = await response.json();
+                    console.error("API Error Response:", errorBody);
+                    throw new Error(`API request failed with status ${response.status}: ${errorBody.error.message}`);
+                }
 
                 const result = await response.json();
                 
@@ -768,4 +774,3 @@
     </script>
 </body>
 </html>
-
