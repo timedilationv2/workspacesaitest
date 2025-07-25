@@ -327,15 +327,8 @@
             <!-- Main Workspace Panel -->
             <div id="workspace-panel" class="main-panel">
                 <div class="workspace-grid">
-                    <section id="memory-panel" class="panel" data-type="memory" style="grid-column: 1 / -1;">
-                        <div class="panel-header">
-                            <h2 class="panel-title">🧠 Sophie's Instructions (Memory)</h2>
-                        </div>
-                        <div class="panel-body">
-                            <textarea id="memory-input" placeholder="Give Sophie a personality or instructions..." rows="3" class="!rounded-xl text-base"></textarea>
-                            <p class="text-xs text-gray-400 mt-2">This text is sent with every request to give Sophie context and long-term memory. It's saved automatically.</p>
-                        </div>
-                    </section>
+                    <!-- NEW: Sophie's Mirror Panel -->
+                    <section id="sophie-mirror-panel" class="panel" style="grid-column: 1 / -1;"></section>
         
                     <section id="editor-panel" class="panel" data-type="editor" style="grid-column: 1 / -1;">
                         <div class="panel-header">
@@ -416,11 +409,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
     <script>
         // ===== Constants and State =====
-        const LS_KEY = 'sophieAiWorkspaceState_v4';
+        const LS_KEY = 'sophieAiWorkspaceState_v5';
         let state = {
             links: [],
             clipboard: [],
-            sophieMemory: "I know you don't want to sign in again. Fine. Just.. give it some instructions. 😜",
+            moods: [], // NEW: To store mood history
             editorContent: ""
         };
         
@@ -428,6 +421,20 @@
             { title: "Proofread AI", desc: "for posting comments" },
             { title: "What's new?", desc: "on Netflix/Hulu/Prime today?" },
             { title: "To-Do List", desc: "Manual reminder for the day" },
+        ];
+
+        const dailyPrompts = [
+            "If today had a color, what would it be?",
+            "What are you grateful for today?",
+            "What's one small thing that would make today great?",
+            "Describe your current mood as a weather pattern."
+        ];
+
+        const whispers = [
+            "I remembered you smiled when it rained last week.",
+            "You said you felt strong yesterday. Keep that energy going.",
+            "Last Tuesday, you told me you missed the sun. I saved that memory for you.",
+            "Thinking of the time you mentioned your favorite song. Maybe listen to it today?"
         ];
 
         const inspirationLinks = [
@@ -446,7 +453,7 @@
         let toastTimer;
         function showToast(msg) {
             const t = $('#toast-notification');
-            clearTimeout(toastTimer);
+            clearTimeout(toastimer);
             t.textContent = msg;
             t.classList.add('show');
             toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
@@ -465,7 +472,7 @@
         // ===== State Management =====
         function save() {
             state.editorContent = $('#editor-input').value;
-            state.sophieMemory = $('#memory-input').value;
+            // Removed sophieMemory, now saving moods
             localStorage.setItem(LS_KEY, JSON.stringify(state));
         }
 
@@ -476,9 +483,7 @@
                 state = {...state, ...loadedState};
             }
             $('#editor-input').value = state.editorContent || '';
-            $('#memory-input').value = state.sophieMemory || '';
             renderAll();
-            // Set initial active nav item
             setActivePanel('workspace-panel');
         }
 
@@ -543,12 +548,51 @@
                 </a>
             `).join('');
         }
+
+        function renderSophieMirror() {
+            const mirrorPanel = $('#sophie-mirror-panel');
+            if (!mirrorPanel) return;
+
+            const randomWhisper = whispers[Math.floor(Math.random() * whispers.length)];
+            const randomPrompt = dailyPrompts[Math.floor(Math.random() * dailyPrompts.length)];
+            const today = new Date().toLocaleDateString();
+            const todaysMood = state.moods.find(m => m.date === today)?.mood;
+
+            let greeting = "Welcome back.";
+            const hour = new Date().getHours();
+            if (hour < 12) greeting = "🌅 Good morning.";
+            else if (hour < 18) greeting = "☀️ Good afternoon.";
+            else greeting = "🌙 Good evening.";
+
+            mirrorPanel.innerHTML = `
+                <div class="panel-body space-y-6">
+                    <h2 class="text-2xl font-semibold">${greeting}</h2>
+                    <div>
+                        <p class="text-sm text-gray-300 mb-2">🧠 How are you feeling today?</p>
+                        <div class="flex gap-2">
+                            <button data-mood="happy" class="mood-btn bg-pink-500/80 hover:bg-pink-600 px-4 py-1 rounded-full text-sm transition-transform hover:scale-105 ${todaysMood === 'happy' ? 'ring-2 ring-white' : ''}">😊 Happy</button>
+                            <button data-mood="meh" class="mood-btn bg-blue-500/80 hover:bg-blue-600 px-4 py-1 rounded-full text-sm transition-transform hover:scale-105 ${todaysMood === 'meh' ? 'ring-2 ring-white' : ''}">😐 Meh</button>
+                            <button data-mood="sad" class="mood-btn bg-purple-500/80 hover:bg-purple-600 px-4 py-1 rounded-full text-sm transition-transform hover:scale-105 ${todaysMood === 'sad' ? 'ring-2 ring-white' : ''}">😢 Sad</button>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-300 mb-1">📝 Today’s Thought</p>
+                        <blockquote class="italic border-l-4 border-indigo-400 pl-4 text-gray-100">“${randomPrompt}”</blockquote>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-300 mb-1">💌 Sophie’s Whisper</p>
+                        <p class="text-pink-300 text-sm">“${randomWhisper}”</p>
+                    </div>
+                </div>
+            `;
+        }
         
         function renderAll() {
             renderLinks();
             renderGeneric('clipboard', '#clipboard-list');
             renderPrompts();
             renderInspirationLinks();
+            renderSophieMirror();
         }
 
         // ===== Gemini API Integration =====
@@ -556,22 +600,19 @@
             const askButton = $('#ask-sophie-btn');
             const btnText = $('#btn-text');
             const loader = $('#loader');
-
-            const apiKey = ""; // This should be left empty, as it's handled by the execution environment.
+            const apiKey = ""; 
             
             askButton.disabled = true;
             btnText.classList.add('hidden');
             loader.classList.remove('hidden');
 
             const userPrompt = $('#editor-input').value;
-            const memoryPrompt = $('#memory-input').value;
-
-            // **FIX:** Correctly structure the prompt for the API.
-            // The memory/system instruction is combined with the user's query into a single user message.
-            const combinedPrompt = `${memoryPrompt}\n\n---\n\n${userPrompt}`;
+            // The "memory" is now the context of the entire app state, but for this call, we'll keep it simple.
+            // A more advanced implementation could stringify parts of the `state` object.
+            const systemInstruction = "You are Sophie, a helpful AI assistant integrated into a workspace. Be concise and friendly.";
+            const combinedPrompt = `${systemInstruction}\n\n---\n\n${userPrompt}`;
 
             let chatHistory = [{ role: "user", parts: [{ text: combinedPrompt }] }];
-
             const payload = { contents: chatHistory };
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
@@ -584,8 +625,7 @@
 
                 if (!response.ok) {
                     const errorBody = await response.json();
-                    console.error("API Error Response:", errorBody);
-                    throw new Error(`API request failed with status ${response.status}: ${errorBody.error.message}`);
+                    throw new Error(`API request failed: ${errorBody.error.message}`);
                 }
 
                 const result = await response.json();
@@ -598,7 +638,6 @@
                     save();
                 } else {
                     showToast("Sophie couldn't generate a response.");
-                    console.error("Unexpected API response structure:", result);
                 }
 
             } catch (error) {
@@ -612,6 +651,19 @@
         }
 
         // ===== Event Handlers =====
+        function setMood(mood) {
+            const today = new Date().toLocaleDateString();
+            const existingEntryIndex = state.moods.findIndex(m => m.date === today);
+            if (existingEntryIndex > -1) {
+                state.moods[existingEntryIndex].mood = mood;
+            } else {
+                state.moods.push({ mood: mood, date: today });
+            }
+            save();
+            showToast(`Mood saved: ${mood}`);
+            renderSophieMirror();
+        }
+
         function addHandler(formSel, inputSel, arrKey) {
             const form = $(formSel);
             if (!form) return;
@@ -631,7 +683,12 @@
             const btn = e.target.closest('button');
             if (!btn) return;
             
-            const { act, type, index, promptTitle, promptDesc } = btn.dataset;
+            const { act, type, index, promptTitle, promptDesc, mood } = btn.dataset;
+
+            if (mood) {
+                setMood(mood);
+                return;
+            }
 
             if (promptTitle) {
                 const editor = $('#editor-input');
@@ -673,7 +730,6 @@
             addHandler('#add-clipboard-form', '#clipboard-input', 'clipboard');
             addHandler('#add-link-form', '#link-title-input', 'links');
             $('#editor-input')?.addEventListener('input', save);
-            $('#memory-input')?.addEventListener('input', save);
             $('#ask-sophie-btn')?.addEventListener('click', callSophieAPI);
         }
         
